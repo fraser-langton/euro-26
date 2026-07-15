@@ -24,7 +24,7 @@ A shortlist of 5–10 items. Per item: name, one-line what/why, time needed, and
 booking/logistics flag. Mark 1–2 as "don't miss".
 
 Also return a plain array of short strings suitable to drop straight into a stay's
-`activities` field in itinerary.json (see AGENTS.md), e.g.
+`activities` field in itineraries.json (see AGENTS.md), e.g.
 `["Tre Cime di Lavaredo loop hike", "Lago di Braies at sunrise", "Cinque Torri"]`.
 
 Do not invent trails, events, or opening details you did not verify.

@@ -172,28 +172,27 @@ const add=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
 function span(i){ if(i.dateRange){const p=i.dateRange.split(" to ");return[pd(p[0].split("/")[0]),pd((p[1]||p[0]).split("/")[0])];} const d=pd(i.date);return[d,d]; }
 
 async function boot(){
-  try{ const r=await fetch("itineraries.json",{cache:"no-store"}); if(!r.ok)throw 0; MANIFEST=await r.json(); }
-  catch(e){ MANIFEST={ active:"default", options:[{ id:"default", name:"Itinerary", file:"itinerary.json" }] }; }
+  try{ const r=await fetch("itineraries.json",{cache:"no-store"}); if(!r.ok)throw new Error("HTTP "+r.status); MANIFEST=await r.json(); }
+  catch(e){ document.querySelector(".stage").innerHTML='<div class="err"><b>Cannot load itineraries.json.</b><br><br>Serve the folder:<br><code>python3 -m http.server 8000</code><br>then open <code>http://localhost:8000/itinerary.html</code><br><br>('+e.message+')</div>'; return; }
   renderModes(); renderTripSelect();
-  const saved=localStorage.getItem("trip"); const ids=(MANIFEST.options||[]).map(o=>o.id);
-  await loadTrip((saved&&ids.includes(saved))?saved:(MANIFEST.active||ids[0]));
+  const saved=localStorage.getItem("trip"); const ids=(MANIFEST.trips||[]).map(t=>t.id);
+  loadTrip((saved&&ids.includes(saved))?saved:(MANIFEST.active||ids[0]));
 }
 
-async function loadTrip(id){
-  const opt=(MANIFEST.options||[]).find(o=>o.id===id)||(MANIFEST.options||[])[0]; if(!opt)return;
-  try{ const r=await fetch(opt.file,{cache:"no-store"}); if(!r.ok)throw new Error("HTTP "+r.status); DATA=await r.json(); }
-  catch(e){ document.querySelector(".stage").innerHTML='<div class="err"><b>Cannot load '+opt.file+'.</b><br><br>Serve the folder:<br><code>python3 -m http.server 8000</code><br><br>('+e.message+')</div>'; return; }
+function loadTrip(id){
+  const t=(MANIFEST.trips||[]).find(x=>x.id===id)||(MANIFEST.trips||[])[0]; if(!t)return;
+  DATA=t;
   localStorage.setItem("trip",id);
   const sel=document.getElementById("tripSelect"); if(sel)sel.value=id;
   stays=[]; markers={};
   let ci=0; DATA.itinerary.forEach(i=>{ if(i.type==="stay"){ i._color=PLACE_COLORS[ci++%PLACE_COLORS.length]; stays.push(i);} });
-  document.getElementById("brand").innerHTML=(DATA.trip||"Trip")+"<small>"+(opt.name||"itinerary")+"</small>";
+  document.getElementById("brand").innerHTML=(DATA.trip||"Trip")+"<small>"+(t.name||"itinerary")+"</small>";
   renderCountdown(); renderProgress(); initMap(); setMode(mode);
 }
 
 function renderTripSelect(){
   const sel=document.getElementById("tripSelect"); sel.innerHTML="";
-  (MANIFEST.options||[]).forEach(o=>{ const op=document.createElement("option"); op.value=o.id; op.textContent=o.name; sel.appendChild(op); });
+  (MANIFEST.trips||[]).forEach(t=>{ const op=document.createElement("option"); op.value=t.id; op.textContent=t.name; sel.appendChild(op); });
   sel.onchange=()=>loadTrip(sel.value);
 }
 

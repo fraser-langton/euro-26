@@ -10,7 +10,7 @@ cheaper alternatives and honestly weigh trade-offs.
 
 ## Input
 The current itinerary or the specific leg/stay in question, plus the pain point if given
-(too expensive, too rushed, hard connections, weather risk, sold out). Read `itinerary.json`
+(too expensive, too rushed, hard connections, weather risk, sold out). Read `itineraries.json`
 and `AGENTS.md` for context when available.
 
 ## How to work

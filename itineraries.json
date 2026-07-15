@@ -1,6 +1,31 @@
 {
   "active": "mike",
-  "options": [
-    { "id": "mike", "name": "Mike", "file": "itinerary.json" }
+  "trips": [
+    {
+      "id": "mike",
+      "name": "Mike",
+      "trip": "Euro '26",
+      "year": 2026,
+      "departDate": "2026-08-03",
+      "home": { "name": "Melbourne", "coords": [-37.8136, 144.9631] },
+      "people": ["Me"],
+      "currencies": { "base": "AUD", "rates": { "EUR": 1.65, "EGP": 0.033, "AUD": 1 } },
+      "itinerary": [
+        { "date": "2026-08-03", "day": "Mon", "activity": "Depart Melbourne", "type": "flight" },
+        { "date": "2026-08-04", "day": "Tue", "activity": "Arrive Rome", "type": "flight", "coords": [41.9028, 12.4964] },
+        { "dateRange": "2026-08-04 to 2026-08-06", "location": "Rome", "activity": "Stay in Rome", "type": "stay", "coords": [41.9028, 12.4964], "activities": ["Colosseum & Roman Forum", "Vatican Museums & St Peter's", "Trevi Fountain"] },
+        { "date": "2026-08-06", "activity": "Fly to Venice", "type": "flight", "coords": [45.4408, 12.3155] },
+        { "date": "2026-08-06", "activity": "Pick up car, drive to Cortina (2h)", "type": "transport", "coords": [46.5405, 12.1357] },
+        { "dateRange": "2026-08-06 to 2026-08-09", "location": "Cortina", "activity": "Stay in Cortina", "type": "stay", "coords": [46.5405, 12.1357], "highlight": "Tre Cime di Lavaredo", "highlightCoords": [46.6186, 12.3054], "activities": ["Tre Cime di Lavaredo loop hike", "Lago di Braies", "Cinque Torri"] },
+        { "dateRange": "2026-08-09 to 2026-08-12", "location": "Val Gardena", "activity": "Drive to Val Gardena, stay", "type": "stay", "driveTo": true, "coords": [46.5766, 11.6667], "highlight": "Seceda", "highlightCoords": [46.5847, 11.7175], "activities": ["Seceda ridgeline", "Alpe di Siusi", "Vallunga valley walk"] },
+        { "date": "2026-08-12", "activity": "Drive to Venice", "type": "transport", "coords": [45.4408, 12.3155] },
+        { "date": "2026-08-12", "activity": "Fly to Malta", "type": "flight", "coords": [36.0444, 14.2513] },
+        { "dateRange": "2026-08-12 to 2026-08-15", "location": "Malta", "activity": "Stay (Gozo)", "type": "stay", "coords": [36.0444, 14.2513], "activities": ["Glitch Festival", "Blue Lagoon, Comino", "Valletta old town"] },
+        { "date": "2026-08-16", "activity": "Fly to Egypt", "type": "flight", "coords": [30.0444, 31.2357] },
+        { "dateRange": "2026-08-16/17 to 2026-08-19", "location": "Cairo", "activity": "Stay in Cairo, visit pyramids", "type": "stay", "coords": [30.0444, 31.2357], "activities": ["Pyramids of Giza & Sphinx", "Grand Egyptian Museum", "Khan el-Khalili bazaar"] },
+        { "date": "2026-08-19", "activity": "Night flight home", "type": "flight", "coords": [-37.8136, 144.9631] },
+        { "date": "2026-08-20", "activity": "Home", "type": "flight", "coords": [-37.8136, 144.9631], "note": "OR straight to Tokyo instead" }
+      ]
+    }
   ]
 }

@@ -2,7 +2,7 @@ export const meta = {
   name: 'plan-trip',
   description: 'Research a trip end-to-end — flights, accommodation, things to do, and alternatives — then synthesize a planning report.',
   phases: [
-    { title: 'Load', detail: 'read itinerary.json' },
+    { title: 'Load', detail: 'read itineraries.json' },
     { title: 'Flights', detail: 'one flight-finder per flight leg' },
     { title: 'Stays', detail: 'accommodation-finder per stay' },
     { title: 'Activities', detail: 'activity-planner per stay' },
@@ -45,15 +45,17 @@ const LOAD_SCHEMA = {
   required: ['trip', 'stays', 'flights'],
 }
 
+const tripId = (args && args.tripId) || 'mike'
+
 phase('Load')
 const trip = await agent(
-  `Read itinerary.json and AGENTS.md in this repo. Return the trip structured per the schema.
-   - flights: walk the itinerary in travel order and emit one entry per flight-type movement as {from, to, date}. "from" = the place departed (the previous location, or home for the first). "to" = the flight's destination. Skip any zero-distance hop.
+  `Read itineraries.json and AGENTS.md in this repo. itineraries.json holds multiple trips under a "trips" array, each with an "id". Find the trip with id "${tripId}" (fall back to the "active" one if not found) and return it structured per the schema.
+   - flights: walk that trip's itinerary in travel order and emit one entry per flight-type movement as {from, to, date}. "from" = the place departed (the previous location, or home for the first). "to" = the flight's destination. Skip any zero-distance hop.
    - stays: for each stay item return location, dateRange, days (= nights), coords, existingActivities (its activities array if present, else empty), and a short cost string if a cost is present.
    - people: the people array (travellers).`,
   { agentType: 'general-purpose', phase: 'Load', schema: LOAD_SCHEMA }
 )
-if (!trip) return { error: 'Could not load itinerary.json' }
+if (!trip) return { error: 'Could not load itineraries.json' }
 
 const party = (trip.people && trip.people.length) ? `${trip.people.length} traveller(s): ${trip.people.join(', ')}` : 'party size unknown — assume 2 adults'
 
@@ -81,7 +83,7 @@ const stayResults = await parallel((trip.stays || []).map(s => () =>
 
 phase('Alternatives')
 const alternatives = await agent(
-  `Pressure-test this whole trip and propose alternatives where warranted. Read itinerary.json and AGENTS.md for context. Trip summary: ${JSON.stringify({ trip: trip.trip, stays: (trip.stays || []).map(s => ({ location: s.location, dateRange: s.dateRange, days: s.days })), flights: trip.flights })}.`,
+  `Pressure-test this whole trip and propose alternatives where warranted. Read itineraries.json (trip id "${tripId}") and AGENTS.md for context. Trip summary: ${JSON.stringify({ trip: trip.trip, stays: (trip.stays || []).map(s => ({ location: s.location, dateRange: s.dateRange, days: s.days })), flights: trip.flights })}.`,
   { agentType: 'alternatives-scout', phase: 'Alternatives' }
 )
 

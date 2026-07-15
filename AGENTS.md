@@ -1,8 +1,8 @@
 # Euro '26 — trip itinerary viewer
 
-Single-file, local, zero-build web app to view and organise one trip. No framework, no
-bundler, no dependencies to install. Data lives in `itinerary.json`; the UI is one static
-`itinerary.html`.
+Single-file, local, zero-build web app to view and organise a trip. No framework, no
+bundler, no dependencies to install. All data (every itinerary) lives in one
+`itineraries.json`; the UI is one static `itinerary.html`.
 
 ## What it is
 
@@ -19,9 +19,8 @@ home, Aug 2026). Three modes over the same data:
 
 | File | Role |
 |------|------|
-| `itineraries.json` | **Manifest** of selectable itineraries (dropdown). Lists `{id, name, file}` + `active`. |
-| `itinerary.json` | Default itinerary data ("Mike"). Source of truth for that trip. |
-| `itinerary.html` | The whole app — HTML + CSS + JS inline. Reads the manifest then the selected file via `fetch`. |
+| `itineraries.json` | **Source of truth.** Every itinerary lives here, keyed by id, under one `trips` array. Edit this to change any trip or add a new one. |
+| `itinerary.html` | The whole app — HTML + CSS + JS inline. Fetches `itineraries.json` once and picks the selected trip client-side. |
 | `AGENTS.md` / `CLAUDE.md` | This doc (CLAUDE.md points here). |
 | `README.md` | Human quick-start. |
 
@@ -31,16 +30,19 @@ home, Aug 2026). Three modes over the same data:
 
 ```jsonc
 {
-  "active": "mike",
-  "options": [ { "id": "mike", "name": "Mike", "file": "itinerary.json" } ]
+  "active": "mike",           // which trip id loads by default
+  "trips": [
+    { "id": "mike", "name": "Mike", "trip": "Euro '26", ... , "itinerary": [ ...items ] }
+  ]
 }
 ```
 
-Each option's `file` is a standalone itinerary file using the exact schema below. **To add an
-alternative:** create `itinerary.<id>.json` with the same shape, then append an option row.
-The app loads `active` first (or the user's last pick, saved in `localStorage["trip"]`);
-switching re-fetches the file and rebuilds the map + all views. Planning agents/workflows
-still target `itinerary.json` unless told otherwise.
+Each entry in `trips` is a full trip object using the exact schema below (`trip`,
+`departDate`, `home`, `people`, `currencies`, `itinerary`), plus `id` (stable key, used by
+`localStorage` and workflows) and `name` (shown in the dropdown). **To add an alternative:**
+append another object to `trips` with a new `id`/`name` — no new file needed. The app loads
+`active` first (or the user's last pick, saved in `localStorage["trip"]`); switching swaps
+the in-memory trip and rebuilds the map + all views, no re-fetch.
 
 ## Run
 
@@ -52,13 +54,13 @@ python3 -m http.server 8000
 
 Open http://localhost:8000/itinerary.html . Any static server works.
 
-## Data model (`itinerary.json`)
-
-Top level:
+## Data model (one entry in `itineraries.json`'s `trips` array)
 
 ```jsonc
 {
-  "trip": "Euro '26",
+  "id": "mike",                            // stable key: dropdown selection, localStorage, workflows
+  "name": "Mike",                          // shown in the dropdown
+  "trip": "Euro '26",                      // shown in the header
   "departDate": "2026-08-03",              // drives the countdown
   "home": { "name": "Melbourne", "coords": [lat, lng] },
   "people": ["Me"],                        // budget split roster
@@ -127,9 +129,12 @@ view, and the trip reads as a story you scroll. Earlier flat/tabbed layouts were
 
 ## Architecture of `itinerary.html`
 
-Plain JS, no build. Flow: `boot()` fetches JSON → assigns stay colors → renders ribbon,
-countdown, map → `setMode("journey")`. Mode switch swaps what the `#feed` shows
-(`renderFeed` / `renderCal` / `renderFin`) and hides/shows the map via a body class.
+Plain JS, no build. Flow: `boot()` fetches `itineraries.json` once (`MANIFEST`) → renders the
+mode switch and the trip dropdown → `loadTrip(id)` picks the active/saved/selected trip from
+`MANIFEST.trips`, assigns stay colors, and renders ribbon, countdown, map. Switching trips in
+the dropdown re-runs `loadTrip` against the already-fetched manifest (no network call). Mode
+switch (`setMode`) swaps what `#feed` shows (`renderFeed` / `renderCal` / `renderFin`) and
+hides/shows the map via a body class.
 
 Key functions: `span()` (date parsing), `renderFeed()` + `placeCard()` + `connector()` +
 `hero()` (journey feed & gap detection), `observe()` (scroll↔map link), `initMap()` +
@@ -141,11 +146,23 @@ Key functions: `span()` (date parsing), `renderFeed()` + `placeCard()` + `connec
   Feed/calendar/budget structure works offline; only the map degrades.
 - **OSRM public demo** is rate-limited and sometimes slow; the straight-line fallback keeps
   routes visible regardless.
-- Keep `itinerary` items in **travel order** — order defines the drawn route and the ribbon.
+- Keep each trip's `itinerary` items in **travel order** — order defines the drawn route and
+  the ribbon.
 - `people` empty or costs absent → Budget shows an empty-state with the schema; that's normal.
+
+## Planning agents & workflows
+
+`.claude/agents/` has four subagents for trip research: `flight-finder`,
+`accommodation-finder`, `activity-planner`, `alternatives-scout`. `.claude/workflows/` has
+`plan-trip` (full research → synthesized report) and `enrich-activities` (activity-planner
+over every stay → drop-in `activities` arrays). Both workflows accept an optional
+`{ tripId: "mike" }` arg to target a specific trip in `itineraries.json`; they default to
+`"mike"` if not given.
 
 ## Extending
 
+- **New alternative itinerary:** append an object to `itineraries.json`'s `trips` array with a
+  new `id`/`name` (see Multiple itineraries above). It appears in the dropdown immediately.
 - **New stop:** add a `stay` item (with `coords`, `activities`) at the right position, plus a
   movement item before it (`type` + destination `coords`) if the mode should show on the map.
 - **New activity in a stay:** append a string to that stay's `activities`.
