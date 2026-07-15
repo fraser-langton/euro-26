@@ -251,6 +251,7 @@ function renderFeed(){
   const feed=document.getElementById("feed"); feed.innerHTML="";
   feed.appendChild(hero());
   const covered=coveredNights(); let prevEnd=null; let stayIdx=0;
+  let prevCoords=(DATA.home&&DATA.home.coords)||null;
   DATA.itinerary.forEach((i,fullIdx)=>{
     const[s,e]=span(i);
     if(i.type==="stay"){
@@ -258,8 +259,9 @@ function renderFeed(){
       prevEnd=e;
       feed.appendChild(placeCard(i, stayIdx++, fullIdx));
     } else {
-      feed.appendChild(connector(i, fullIdx));
+      feed.appendChild(connector(i, fullIdx, prevCoords));
     }
+    if(i.coords)prevCoords=i.coords;
   });
   observe();
 }
@@ -298,10 +300,11 @@ function placeCard(i, idx, fullIdx){
   return leg;
 }
 
-function connector(i, fullIdx){
+function connector(i, fullIdx, prevCoords){
   const c=document.createElement("div"); c.className="conn "+(i.type||"");
   c.dataset.fullIdx=fullIdx;
-  if(i.coords){ c.dataset.lat=i.coords[0]; c.dataset.lng=i.coords[1]; }
+  if(i.coords){ c.dataset.lat=i.coords[0]; c.dataset.lng=i.coords[1];
+    if(prevCoords&&!same(prevCoords,i.coords)){ c.dataset.oLat=prevCoords[0]; c.dataset.oLng=prevCoords[1]; } }
   const ic=i.type==="flight"?"✈":i.type==="transport"?"🚗":"•";
   c.innerHTML='<div class="ic">'+ic+'</div><div>'+i.activity+(i.note?' — <i>'+i.note+'</i>':'')+'</div>';
   return c;
@@ -315,7 +318,12 @@ function activatePlace(target){
   if(isPlace){ const idx=target.dataset.idx;
     document.querySelectorAll(".prog .stop").forEach(s=>s.classList.toggle("active",s.dataset.idx===idx)); }
   const lat=parseFloat(target.dataset.lat), lng=parseFloat(target.dataset.lng);
-  if(map&&!isNaN(lat)){ map.flyTo([lat,lng],7,{duration:.9}); map.closePopup(); }
+  const oLat=parseFloat(target.dataset.oLat), oLng=parseFloat(target.dataset.oLng);
+  if(map&&!isNaN(lat)){
+    if(!isPlace&&!isNaN(oLat)) map.flyToBounds([[oLat,oLng],[lat,lng]],{padding:[70,70],duration:.9});
+    else map.flyTo([lat,lng],7,{duration:.9});
+    map.closePopup();
+  }
   setActiveLine(target.dataset.fullIdx);
   setActivePin(target.dataset.fullIdx);
 }
