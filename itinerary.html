@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Euro '26</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root {
+    --bg:#0b0f14; --bg2:#0f151d; --panel:rgba(26,33,44,.72); --line:rgba(255,255,255,.08);
+    --txt:#eef3f8; --dim:#8b98a5; --accent:#5ac8fa; --gold:#ffcf6b;
+    --stay:#5ac8fa; --flight:#c792ea; --transport:#ffcf6b; --gap:#ff6b6b; --ok:#67d98a;
+    --blur: blur(14px);
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#eef2f6; --bg2:#e4eaf0; --panel:rgba(255,255,255,.82); --line:rgba(0,0,0,.09);
+      --txt:#0f151d; --dim:#5c6b7a; --accent:#0089c2; --gold:#c8860a; }
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; }
+  body { font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:linear-gradient(160deg,var(--bg),var(--bg2)); color:var(--txt); overflow:hidden; }
+
+  /* ---- top ribbon ---- */
+  .ribbon { position:fixed; top:0; left:0; right:0; z-index:900; height:64px; display:flex;
+    align-items:center; gap:20px; padding:0 22px; background:var(--panel);
+    -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur); border-bottom:1px solid var(--line); }
+  .brand { font-size:19px; font-weight:800; letter-spacing:-.01em; white-space:nowrap; }
+  .brand small { display:block; font-size:11px; font-weight:500; color:var(--dim); letter-spacing:.06em; text-transform:uppercase; }
+  .cd { font-size:13px; color:var(--dim); white-space:nowrap; }
+  .cd b { color:var(--accent); font-size:20px; }
+  /* journey progress line */
+  .prog { flex:1; display:flex; align-items:center; gap:0; min-width:0; overflow:hidden; }
+  .prog .stop { position:relative; display:flex; flex-direction:column; align-items:center; cursor:pointer; }
+  .prog .seg { flex:1; height:2px; background:var(--line); min-width:8px; }
+  .prog .seg.done { background:var(--accent); }
+  .prog .dot { width:9px; height:9px; border-radius:50%; background:var(--line); border:2px solid var(--bg); transition:.2s; }
+  .prog .stop.done .dot { background:var(--accent); }
+  .prog .stop.now .dot { background:var(--gold); box-shadow:0 0 0 4px rgba(255,207,107,.25); }
+  .prog .lab { position:absolute; top:14px; font-size:10px; color:var(--dim); white-space:nowrap;
+    opacity:0; transition:.2s; pointer-events:none; }
+  .prog .stop:hover .lab, .prog .stop.active .lab { opacity:1; color:var(--txt); }
+  .prog .stop.active .dot { transform:scale(1.5); background:var(--gold); }
+  /* mode switch */
+  .modes { display:flex; background:rgba(127,127,127,.14); border-radius:10px; padding:3px; }
+  .modes button { border:none; background:none; color:var(--dim); padding:7px 14px; border-radius:8px;
+    font-size:13px; font-weight:600; cursor:pointer; }
+  .modes button.active { background:var(--accent); color:#04121a; }
+
+  /* ---- layout ---- */
+  .stage { position:absolute; top:64px; left:0; right:0; bottom:0; }
+  #map { position:absolute; inset:0; width:55%; }
+  .feed { position:absolute; top:0; right:0; bottom:0; width:45%; overflow-y:auto; padding:28px 26px 60vh;
+    scroll-behavior:smooth; }
+  .mode-cal .feed, .mode-fin .feed { width:100%; }
+  .mode-cal #map, .mode-fin #map { display:none; }
+  .feed::-webkit-scrollbar { width:9px; } .feed::-webkit-scrollbar-thumb { background:var(--line); border-radius:5px; }
+
+  /* overview hero */
+  .hero { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:26px; }
+  .stat { background:var(--panel); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+    border:1px solid var(--line); border-radius:16px; padding:14px 18px; flex:1; min-width:110px; }
+  .stat .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--dim); }
+  .stat .val { font-size:26px; font-weight:800; margin-top:2px; }
+  .ring { position:relative; width:96px; height:96px; }
+  .ring svg { transform:rotate(-90deg); } .ring .mid { position:absolute; inset:0; display:flex;
+    flex-direction:column; align-items:center; justify-content:center; }
+  .ring .mid b { font-size:16px; } .ring .mid span { font-size:10px; color:var(--dim); }
+
+  /* itinerary sections */
+  .leg { position:relative; margin:0 0 14px; }
+  .place { background:var(--panel); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
+    border:1px solid var(--line); border-radius:18px; padding:0; overflow:hidden; transition:transform .25s, box-shadow .25s;
+    scroll-margin-top:20px; }
+  .place.active { transform:translateY(-2px); box-shadow:0 12px 40px rgba(0,0,0,.35); border-color:var(--stay); }
+  .place .bar { height:6px; }
+  .place .body { padding:16px 18px; }
+  .place .top { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+  .place h2 { margin:0; font-size:22px; letter-spacing:-.01em; }
+  .place .nights { font-size:13px; color:var(--dim); white-space:nowrap; }
+  .place .dates { font-size:13px; color:var(--dim); margin-top:2px; }
+  .place .act { margin-top:8px; font-size:14.5px; }
+  .chips { margin-top:10px; display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { font-size:12px; padding:4px 10px; border-radius:20px; background:rgba(255,207,107,.14); color:var(--gold); font-weight:600; }
+  .chip.cost { background:rgba(103,217,138,.14); color:var(--ok); }
+  .chip.pay { background:rgba(255,107,107,.14); color:var(--gap); }
+  .note { margin-top:8px; font-size:13px; color:var(--dim); font-style:italic; }
+  .subacts { list-style:none; margin:12px 0 2px; padding:0; }
+  .subacts li { position:relative; padding:6px 0 6px 22px; font-size:14px; border-top:1px solid var(--line); }
+  .subacts li:first-child { border-top:none; }
+  .subacts li::before { content:""; position:absolute; left:4px; top:50%; width:7px; height:7px; margin-top:-3.5px;
+    border-radius:50%; background:currentColor; opacity:.5; }
+  .legend { position:absolute; left:14px; bottom:14px; z-index:600; background:var(--panel);
+    -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur); border:1px solid var(--line);
+    border-radius:12px; padding:9px 13px; font-size:12px; display:flex; flex-direction:column; gap:6px; }
+  .legend .row { display:flex; align-items:center; gap:8px; color:var(--dim); }
+  .legend .ln { width:26px; height:0; border-top:3px solid var(--flight); }
+  .legend .ln.air { border-top-style:dashed; border-color:var(--flight); }
+  .legend .ln.road { border-top-style:solid; border-color:var(--transport); }
+
+  /* connectors (flights/transport) */
+  .conn { display:flex; align-items:center; gap:10px; padding:4px 0 4px 8px; margin:2px 0; color:var(--dim); font-size:13px; }
+  .conn .ic { width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:13px; border:1px solid var(--line); flex-shrink:0; }
+  .conn.flight .ic { color:var(--flight); } .conn.transport .ic { color:var(--transport); }
+  .gap-warn { display:flex; gap:8px; align-items:center; background:rgba(255,107,107,.1); border:1px dashed var(--gap);
+    color:var(--gap); border-radius:12px; padding:9px 14px; margin:8px 0; font-size:13px; }
+
+  /* calendar */
+  .cal-wrap { max-width:920px; margin:0 auto; }
+  .cal { display:grid; grid-template-columns:repeat(7,1fr); gap:7px; margin-bottom:26px; }
+  .cal .dow { text-align:center; font-size:11px; color:var(--dim); font-weight:700; text-transform:uppercase; }
+  .cal .cell { background:var(--panel); border:1px solid var(--line); border-radius:12px; min-height:92px; padding:7px 8px; }
+  .cal .cell.empty { background:none; border:none; }
+  .cal .dnum { font-size:12px; color:var(--dim); font-weight:700; }
+  .cal .cell.today { outline:2px solid var(--gold); }
+  .cal .band { border-radius:7px; padding:3px 7px; margin-top:5px; font-size:11px; font-weight:700; color:#04121a; }
+  .cal .ev { font-size:11px; margin-top:4px; opacity:.85; }
+  h3.mon { font-size:15px; margin:0 0 12px; letter-spacing:.02em; }
+
+  /* budget */
+  .fin-wrap { max-width:820px; margin:0 auto; }
+  table { width:100%; border-collapse:collapse; margin-top:10px; }
+  th,td { text-align:left; padding:11px 12px; border-bottom:1px solid var(--line); font-size:14px; }
+  th { color:var(--dim); font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  td.num,th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .empty { color:var(--dim); text-align:center; padding:50px 20px; }
+  code { background:rgba(127,127,127,.16); padding:2px 7px; border-radius:5px; font-size:13px; }
+  .err { color:var(--gap); padding:40px; text-align:center; }
+  .leaflet-container { background:var(--bg2); }
+  @media (max-width:860px) {
+    body { overflow:auto; }
+    .ribbon { flex-wrap:wrap; height:auto; padding:10px 14px; gap:10px; }
+    .prog { order:3; width:100%; } .stage { position:static; }
+    #map { position:relative; width:100%; height:44vh; } .feed { position:static; width:100%; padding:18px; }
+    .mode-journey .stage { display:flex; flex-direction:column; }
+  }
+</style>
+</head>
+<body class="mode-journey">
+<div class="ribbon">
+  <div class="brand" id="brand">Euro '26<small>itinerary</small></div>
+  <div class="prog" id="prog"></div>
+  <div class="cd" id="cd"></div>
+  <div class="modes" id="modes"></div>
+</div>
+<div class="stage">
+  <div id="map"></div>
+  <div class="feed" id="feed"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+const MODES=[{id:"journey",label:"Journey"},{id:"cal",label:"Calendar"},{id:"fin",label:"Budget"}];
+const PLACE_COLORS=["#5ac8fa","#67d98a","#ffcf6b","#c792ea","#ff8a65","#4dd0e1","#f06292"];
+const TODAY=new Date(); TODAY.setHours(0,0,0,0);
+let DATA, map, markers={}, stays=[], mode="journey", mapReady=false, io;
+
+const pd=s=>{const[y,m,d]=s.slice(0,10).split("-").map(Number);return new Date(y,m-1,d);};
+const iso=d=>{const z=new Date(d);z.setMinutes(z.getMinutes()-z.getTimezoneOffset());return z.toISOString().slice(0,10);};
+const fmt=d=>d.toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"});
+const add=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
+function span(i){ if(i.dateRange){const p=i.dateRange.split(" to ");return[pd(p[0].split("/")[0]),pd((p[1]||p[0]).split("/")[0])];} const d=pd(i.date);return[d,d]; }
+
+async function boot(){
+  try{ const r=await fetch("itinerary.json",{cache:"no-store"}); if(!r.ok)throw new Error("HTTP "+r.status); DATA=await r.json(); }
+  catch(e){ document.querySelector(".stage").innerHTML='<div class="err"><b>Cannot load itinerary.json.</b><br><br>Serve the folder:<br><code>python3 -m http.server 8000</code><br>then open <code>http://localhost:8000/itinerary.html</code><br><br>('+e.message+')</div>'; return; }
+  document.getElementById("brand").innerHTML=(DATA.trip||"Trip")+"<small>itinerary</small>";
+  // assign color identity to each stay
+  let ci=0; DATA.itinerary.forEach(i=>{ if(i.type==="stay"){ i._color=PLACE_COLORS[ci++%PLACE_COLORS.length]; stays.push(i);} });
+  renderModes(); renderCountdown(); renderProgress(); initMap(); setMode("journey");
+}
+
+function renderModes(){ const el=document.getElementById("modes"); MODES.forEach(m=>{const b=document.createElement("button");b.textContent=m.label;b.dataset.id=m.id;b.onclick=()=>setMode(m.id);el.appendChild(b);}); }
+function setMode(m){ mode=m; document.body.className="mode-"+m;
+  document.querySelectorAll("#modes button").forEach(b=>b.classList.toggle("active",b.dataset.id===m));
+  if(m==="journey"){ renderFeed(); if(map)setTimeout(()=>map.invalidateSize(),50); }
+  else if(m==="cal") renderCal(); else renderFin();
+}
+
+function tripBounds(){ let min=null,max=null; DATA.itinerary.forEach(i=>{const[s,e]=span(i);if(!min||s<min)min=s;if(!max||e>max)max=e;}); return[min,max]; }
+
+function renderCountdown(){ const el=document.getElementById("cd"); if(!DATA.departDate)return;
+  const dep=pd(DATA.departDate); const days=Math.round((dep-TODAY)/864e5);
+  if(days>0)el.innerHTML="<b>"+days+"</b> days to go";
+  else if(days===0)el.innerHTML="<b>Today!</b> ✈"; else { const[,mx]=tripBounds(); const left=Math.round((mx-TODAY)/864e5); el.innerHTML= left>=0? "<b>"+left+"</b> days left on trip":"trip complete"; }
+}
+
+function renderProgress(){ const el=document.getElementById("prog"); el.innerHTML=""; const now=TODAY;
+  stays.forEach((st,idx)=>{ const[s,e]=span(st); const done=e<=now; const isNow=s<=now&&now<e;
+    if(idx>0){const seg=document.createElement("div");seg.className="seg"+(done?" done":"");el.appendChild(seg);}
+    const stop=document.createElement("div"); stop.className="stop"+(done?" done":"")+(isNow?" now":""); stop.dataset.idx=idx;
+    stop.innerHTML='<div class="dot"></div><div class="lab">'+st.location+'</div>';
+    stop.onclick=()=>{ setMode("journey"); const node=document.querySelector('.place[data-idx="'+idx+'"]'); if(node)node.scrollIntoView({block:"center"}); };
+    el.appendChild(stop);
+  });
+}
+
+function coveredNights(){ const c=new Set(); stays.forEach(i=>{const[s,e]=span(i);for(let d=new Date(s);d<e;d=add(d,1))c.add(iso(d));}); return c; }
+
+function renderFeed(){
+  const feed=document.getElementById("feed"); feed.innerHTML="";
+  feed.appendChild(hero());
+  const covered=coveredNights(); let prevEnd=null; let stayIdx=0;
+  DATA.itinerary.forEach(i=>{
+    const[s,e]=span(i);
+    if(i.type==="stay"){
+      if(prevEnd){ for(let d=new Date(prevEnd);d<s;d=add(d,1)){ if(!covered.has(iso(d))){ const w=document.createElement("div"); w.className="gap-warn"; w.innerHTML="⚠ No stay booked · night of "+fmt(d); feed.appendChild(w);} } }
+      prevEnd=e;
+      feed.appendChild(placeCard(i, stayIdx++));
+    } else {
+      feed.appendChild(connector(i));
+    }
+  });
+  observe();
+}
+
+function hero(){
+  const wrap=document.createElement("div"); wrap.className="hero";
+  const[min,max]=tripBounds(); const totalDays=Math.round((max-min)/864e5)+1;
+  const countries=new Set(); stays.forEach(s=>countries.add(s.location)); // proxy: distinct bases
+  // budget
+  const rates=(DATA.currencies&&DATA.currencies.rates)||{}; const base=(DATA.currencies&&DATA.currencies.base)||"AUD";
+  let total=0,paid=0; DATA.itinerary.forEach(i=>{ if(i.cost){const b=i.cost.amount*(rates[i.cost.currency]!=null?rates[i.cost.currency]:1); total+=b; if(i.cost.paid)paid+=b;} });
+  const pct= total? Math.round(paid/total*100):0;
+  wrap.innerHTML=
+    '<div class="stat"><div class="lbl">Duration</div><div class="val">'+totalDays+'<span style="font-size:14px;color:var(--dim)"> days</span></div></div>'+
+    '<div class="stat"><div class="lbl">Stops</div><div class="val">'+stays.length+'</div></div>';
+  if(total>0){
+    const R=42,C=2*Math.PI*R, off=C*(1-paid/total);
+    const ring=document.createElement("div"); ring.className="stat"; ring.style.flex="0 0 auto";
+    ring.innerHTML='<div class="lbl">Budget ('+base+')</div><div class="ring"><svg width="96" height="96">'+
+      '<circle cx="48" cy="48" r="'+R+'" fill="none" stroke="var(--line)" stroke-width="8"/>'+
+      '<circle cx="48" cy="48" r="'+R+'" fill="none" stroke="var(--ok)" stroke-width="8" stroke-linecap="round" stroke-dasharray="'+C+'" stroke-dashoffset="'+off+'"/></svg>'+
+      '<div class="mid"><b>'+pct+'%</b><span>paid</span></div></div>'+
+      '<div style="font-size:13px;color:var(--dim);margin-top:6px">'+Math.round(total).toLocaleString()+' total</div>';
+    wrap.appendChild(ring);
+  }
+  return wrap;
+}
+
+function placeCard(i, idx){
+  const[s,e]=span(i); const nights=Math.round((e-s)/864e5);
+  const leg=document.createElement("div"); leg.className="leg";
+  const rates=(DATA.currencies&&DATA.currencies.rates)||{}; const base=(DATA.currencies&&DATA.currencies.base)||"AUD";
+  let chips="";
+  if(i.highlight) chips+='<span class="chip">★ '+i.highlight+'</span>';
+  if(i.cost){ const b=Math.round(i.cost.amount*(rates[i.cost.currency]!=null?rates[i.cost.currency]:1));
+    chips+='<span class="chip '+(i.cost.paid?"cost":"pay")+'">'+(i.cost.paid?"✓ ":"")+b.toLocaleString()+" "+base+'</span>'; }
+  leg.innerHTML=
+    '<div class="place" data-idx="'+idx+'" data-lat="'+(i.coords?i.coords[0]:"")+'" data-lng="'+(i.coords?i.coords[1]:"")+'">'+
+      '<div class="bar" style="background:'+i._color+'"></div>'+
+      '<div class="body">'+
+        '<div class="top"><h2>'+i.location+'</h2><div class="nights">'+nights+' night'+(nights!==1?"s":"")+'</div></div>'+
+        '<div class="dates">'+fmt(s)+' → '+fmt(e)+'</div>'+
+        '<div class="act">'+i.activity+'</div>'+
+        (chips?'<div class="chips">'+chips+'</div>':'')+
+        (Array.isArray(i.activities)&&i.activities.length?'<ul class="subacts">'+i.activities.map(a=>'<li>'+a+'</li>').join("")+'</ul>':'')+
+        (i.note?'<div class="note">'+i.note+'</div>':'')+
+      '</div>'+
+    '</div>';
+  return leg;
+}
+
+function connector(i){
+  const c=document.createElement("div"); c.className="conn "+(i.type||"");
+  const ic=i.type==="flight"?"✈":i.type==="transport"?"🚗":"•";
+  c.innerHTML='<div class="ic">'+ic+'</div><div>'+i.activity+(i.note?' — <i>'+i.note+'</i>':'')+'</div>';
+  return c;
+}
+
+// scroll-linked map
+function observe(){
+  if(io)io.disconnect();
+  io=new IntersectionObserver(es=>{
+    es.forEach(en=>{ if(en.isIntersecting){
+      document.querySelectorAll(".place.active").forEach(p=>p.classList.remove("active"));
+      en.target.classList.add("active");
+      const idx=en.target.dataset.idx;
+      document.querySelectorAll(".prog .stop").forEach(s=>s.classList.toggle("active",s.dataset.idx===idx));
+      const lat=parseFloat(en.target.dataset.lat), lng=parseFloat(en.target.dataset.lng);
+      if(map&&!isNaN(lat)){ map.flyTo([lat,lng],7,{duration:.9}); const mk=markers[idx]; if(mk)mk.openPopup(); }
+    }});
+  },{ root:document.getElementById("feed"), rootMargin:"-45% 0px -45% 0px", threshold:0 });
+  document.querySelectorAll(".place").forEach(p=>io.observe(p));
+}
+
+function initMap(){
+  map=L.map("map",{zoomControl:true,attributionControl:false}).setView([44,12],5);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{maxZoom:19}).addTo(map);
+  const pts=[],bounds=[];
+  stays.forEach((i,idx)=>{ if(!i.coords)return; bounds.push(i.coords); pts.push(i.coords);
+    const ic=L.divIcon({className:"",html:'<div style="width:16px;height:16px;border-radius:50%;background:'+i._color+';border:3px solid #04121a;box-shadow:0 0 0 2px '+i._color+'"></div>',iconSize:[16,16],iconAnchor:[8,8]});
+    const m=L.marker(i.coords,{icon:ic}).addTo(map).bindPopup("<b>"+i.location+"</b><br>"+i.activity+(i.highlight?"<br>★ "+i.highlight:""));
+    markers[idx]=m;
+    if(i.highlightCoords){ L.circleMarker(i.highlightCoords,{radius:5,color:"#ffcf6b",fillColor:"#ffcf6b",fillOpacity:.9,weight:1}).addTo(map).bindPopup("★ "+i.highlight); bounds.push(i.highlightCoords); }
+  });
+  if(DATA.home&&DATA.home.coords){ L.marker(DATA.home.coords,{icon:L.divIcon({className:"",html:'<div style="font-size:18px">🏠</div>',iconSize:[20,20],iconAnchor:[10,10]})}).addTo(map).bindPopup("🏠 "+DATA.home.name); bounds.push(DATA.home.coords); }
+  drawRoute();
+  addLegend();
+  map.fitBounds(bounds,{padding:[50,50]});
+  mapReady=true;
+}
+
+// ---- mode-aware paths ----
+const same=(a,b)=>a&&b&&Math.abs(a[0]-b[0])<1e-4&&Math.abs(a[1]-b[1])<1e-4;
+function drawRoute(){
+  // ordered waypoints: home origin, then every item carrying coords
+  const wp=[];
+  if(DATA.home&&DATA.home.coords) wp.push({coords:DATA.home.coords,type:"flight"});
+  DATA.itinerary.forEach(i=>{ if(i.coords) wp.push({coords:i.coords,type:i.type,driveTo:i.driveTo}); });
+  for(let k=1;k<wp.length;k++){
+    const a=wp[k-1].coords, b=wp[k].coords; if(same(a,b))continue;
+    let mode=wp[k].type;
+    if(mode==="stay") mode = wp[k].driveTo ? "transport" : "flight";
+    if(mode==="transport") drawRoad(a,b); else drawFlight(a,b);
+  }
+}
+// geodesic arc via slerp — renders as a curved plane path on the map
+function drawFlight(a,b){
+  const toXYZ=([lat,lng])=>{const p=lat*Math.PI/180,l=lng*Math.PI/180;return[Math.cos(p)*Math.cos(l),Math.cos(p)*Math.sin(l),Math.sin(p)];};
+  const A=toXYZ(a),B=toXYZ(b); let dot=A[0]*B[0]+A[1]*B[1]+A[2]*B[2]; dot=Math.max(-1,Math.min(1,dot));
+  const om=Math.acos(dot), sin=Math.sin(om); const N=64, line=[];
+  for(let i=0;i<=N;i++){ const t=i/N;
+    let x,y,z;
+    if(sin<1e-6){x=A[0];y=A[1];z=A[2];}
+    else{const c1=Math.sin((1-t)*om)/sin,c2=Math.sin(t*om)/sin;
+      x=c1*A[0]+c2*B[0];y=c1*A[1]+c2*B[1];z=c1*A[2]+c2*B[2];}
+    const lat=Math.atan2(z,Math.sqrt(x*x+y*y))*180/Math.PI, lng=Math.atan2(y,x)*180/Math.PI;
+    line.push([lat,lng]);
+  }
+  L.polyline(line,{color:"#c792ea",weight:2.5,dashArray:"1 9",opacity:.85,lineCap:"round"}).addTo(map);
+  const mid=line[Math.floor(N/2)];
+  L.marker(mid,{icon:L.divIcon({className:"",html:'<div style="font-size:14px;transform:rotate(45deg)">✈</div>',iconSize:[16,16],iconAnchor:[8,8]}),interactive:false}).addTo(map);
+}
+// real road geometry via OSRM public router; falls back to straight line offline
+function drawRoad(a,b){
+  const fb=()=>L.polyline([a,b],{color:"#ffcf6b",weight:3,opacity:.5,dashArray:"6 6"}).addTo(map);
+  const url="https://router.project-osrm.org/route/v1/driving/"+a[1]+","+a[0]+";"+b[1]+","+b[0]+"?overview=full&geometries=geojson";
+  fetch(url).then(r=>r.ok?r.json():Promise.reject()).then(j=>{
+    const g=j&&j.routes&&j.routes[0]&&j.routes[0].geometry.coordinates;
+    if(!g)return fb();
+    L.polyline(g.map(c=>[c[1],c[0]]),{color:"#ffcf6b",weight:3.5,opacity:.85,lineCap:"round"}).addTo(map);
+  }).catch(fb);
+}
+function addLegend(){
+  const div=L.DomUtil.create("div","legend");
+  div.innerHTML='<div class="row"><span class="ln air"></span> Flight</div><div class="row"><span class="ln road"></span> Drive</div>';
+  L.DomEvent.disableClickPropagation(div);
+  document.getElementById("map").appendChild(div);
+}
+
+function renderCal(){
+  const feed=document.getElementById("feed"); const wrap=document.createElement("div"); wrap.className="cal-wrap";
+  const[min,max]=tripBounds(); const byDate={};
+  DATA.itinerary.forEach(i=>{ const[s,e]=span(i);
+    if(i.type==="stay"){ for(let d=new Date(s);d<e;d=add(d,1)){ const k=iso(d); (byDate[k]=byDate[k]||{ev:[]}).stay=i; } }
+    else { const k=iso(s); (byDate[k]=byDate[k]||{ev:[]}).ev.push(i); } });
+  const dow=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  let html=""; let m=new Date(min.getFullYear(),min.getMonth(),1); const end=new Date(max.getFullYear(),max.getMonth(),1);
+  while(m<=end){
+    html+='<h3 class="mon">'+m.toLocaleDateString(undefined,{month:"long",year:"numeric"})+'</h3><div class="cal">';
+    dow.forEach(d=>html+='<div class="dow">'+d+'</div>');
+    let lead=(new Date(m.getFullYear(),m.getMonth(),1).getDay()+6)%7;
+    for(let i=0;i<lead;i++)html+='<div class="cell empty"></div>';
+    const dim=new Date(m.getFullYear(),m.getMonth()+1,0).getDate();
+    for(let day=1;day<=dim;day++){ const dt=new Date(m.getFullYear(),m.getMonth(),day); const r=byDate[iso(dt)];
+      html+='<div class="cell'+(iso(dt)===iso(TODAY)?" today":"")+'"><div class="dnum">'+day+'</div>';
+      if(r&&r.stay)html+='<div class="band" style="background:'+r.stay._color+'">'+r.stay.location+'</div>';
+      if(r)r.ev.forEach(ev=>html+='<div class="ev">'+(ev.type==="flight"?"✈ ":"🚗 ")+ev.activity+'</div>');
+      html+='</div>';
+    }
+    html+='</div>'; m=new Date(m.getFullYear(),m.getMonth()+1,1);
+  }
+  wrap.innerHTML=html; feed.innerHTML=""; feed.appendChild(wrap);
+}
+
+function renderFin(){
+  const feed=document.getElementById("feed"); const wrap=document.createElement("div"); wrap.className="fin-wrap";
+  const rates=(DATA.currencies&&DATA.currencies.rates)||{}; const base=(DATA.currencies&&DATA.currencies.base)||"AUD";
+  const people=DATA.people||["Me"]; const rows=DATA.itinerary.filter(i=>i.cost);
+  if(!rows.length){ wrap.innerHTML='<div class="empty">No costs yet. Add <code>cost</code> to any item in itinerary.json:<br><br><code>"cost": { "amount": 1200, "currency": "EUR", "paid": true, "split": "all" }</code><br><br>split: <code>"all"</code> · a number · or names <code>["Me","Sam"]</code></div>'; feed.innerHTML=""; feed.appendChild(wrap); return; }
+  const tb=(a,c)=>a*(rates[c]!=null?rates[c]:1); let total=0,paid=0; const pp={}; people.forEach(p=>pp[p]=0);
+  let html='<table><thead><tr><th>Item</th><th>Split</th><th class="num">Amount</th><th class="num">'+base+'</th><th>Status</th></tr></thead><tbody>';
+  rows.forEach(i=>{ const c=i.cost; const b=tb(c.amount,c.currency||base); total+=b; if(c.paid)paid+=b;
+    let sh=people; if(Array.isArray(c.split))sh=c.split; else if(typeof c.split==="number")sh=people.slice(0,c.split);
+    const per=b/(sh.length||1); sh.forEach(p=>{if(pp[p]==null)pp[p]=0; pp[p]+=per;});
+    html+='<tr><td>'+(i.location?i.location+" — ":"")+i.activity+'</td><td>'+(Array.isArray(c.split)?c.split.join(", "):(c.split||"all"))+'</td><td class="num">'+c.amount.toLocaleString()+" "+(c.currency||base)+'</td><td class="num">'+Math.round(b).toLocaleString()+'</td><td>'+(c.paid?'<span style="color:var(--ok)">paid</span>':'<span style="color:var(--gap)">to pay</span>')+'</td></tr>';
+  });
+  html+='</tbody></table><div class="hero" style="margin-top:22px">';
+  html+='<div class="stat"><div class="lbl">Total</div><div class="val">'+Math.round(total).toLocaleString()+'</div></div>';
+  html+='<div class="stat"><div class="lbl">Paid</div><div class="val" style="color:var(--ok)">'+Math.round(paid).toLocaleString()+'</div></div>';
+  html+='<div class="stat"><div class="lbl">Outstanding</div><div class="val" style="color:var(--gap)">'+Math.round(total-paid).toLocaleString()+'</div></div>';
+  Object.keys(pp).forEach(p=>html+='<div class="stat"><div class="lbl">'+p+'</div><div class="val">'+Math.round(pp[p]).toLocaleString()+'</div></div>');
+  html+='</div>'; wrap.innerHTML=html; feed.innerHTML=""; feed.appendChild(wrap);
+}
+
+boot();
+</script>
+</body>
+</html>
