@@ -523,6 +523,10 @@ window.addEventListener("resize", ()=>{ syncRibbonH();
   _wasMobile=isMobile; });
 syncRibbonH();
 
+document.getElementById("feed").addEventListener("click",e=>{
+  const item=e.target.closest(".place,.conn"); if(item)activatePlace(item);
+});
+
 boot();
 </script>
 </body>
