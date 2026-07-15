@@ -385,12 +385,18 @@ function cursorTick(){
 let _cursorRaf=null;
 function scheduleCursorTick(){ if(_cursorRaf)return; _cursorRaf=requestAnimationFrame(()=>{ _cursorRaf=null; cursorTick(); }); }
 window.addEventListener("scroll", scheduleCursorTick, {passive:true, capture:true});
+
+function deselectAll(){
+  document.querySelectorAll(".place.active,.conn.active,.prog .stop.active").forEach(p=>p.classList.remove("active"));
+  setActiveLine(null); setActivePin(null); _lastActiveIdx=null;
+}
 function observe(){ _lastActiveIdx=null; scheduleCursorTick(); }
 
 function initMap(){
   if(map){ map.remove(); map=null; } mapReady=false; routeLines={}; activeLineIdx=null; markersByFullIdx={}; activePinIdx=null;
   const leg=document.querySelector("#map .legend"); if(leg)leg.remove();
   map=L.map("map",{zoomControl:true,attributionControl:false}).setView([44,12],5);
+  map.on("click",deselectAll);
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{maxZoom:19}).addTo(map);
   const pts=[],bounds=[];
   stays.forEach((i,idx)=>{ if(!i.coords)return; bounds.push(i.coords); pts.push(i.coords);
