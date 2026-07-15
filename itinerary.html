@@ -152,6 +152,8 @@
   code { background:rgba(127,127,127,.16); padding:2px 7px; border-radius:5px; font-size:13px; }
   .err { color:var(--gap); padding:40px; text-align:center; }
   .leaflet-container { background:var(--bg2); }
+  .pin-dot { transition:transform .25s ease, box-shadow .25s ease; transform-origin:center; }
+  .leaflet-marker-icon.pin.active .pin-dot { transform:scale(1.7); box-shadow:0 0 0 5px rgba(255,255,255,.55), 0 0 14px rgba(255,255,255,.7) !important; }
   @media (max-width:860px) {
     html,body { height:auto; overflow:visible; }
     .ribbon { flex-wrap:wrap; height:auto; padding:10px 14px; gap:10px; }
@@ -182,7 +184,7 @@ const MODES=[{id:"journey",label:"Journey"},{id:"cal",label:"Calendar"},{id:"fin
 const PLACE_COLORS=["#5ac8fa","#67d98a","#ffcf6b","#c792ea","#ff8a65","#4dd0e1","#f06292"];
 const TODAY=new Date(); TODAY.setHours(0,0,0,0);
 let DATA, map, markers={}, stays=[], mode="journey", mapReady=false, io, MANIFEST=null;
-let routeLines={}, activeLineIdx=null;
+let routeLines={}, activeLineIdx=null, markersByFullIdx={}, activePinIdx=null;
 
 const pd=s=>{const[y,m,d]=s.slice(0,10).split("-").map(Number);return new Date(y,m-1,d);};
 const iso=d=>{const z=new Date(d);z.setMinutes(z.getMinutes()-z.getTimezoneOffset());return z.toISOString().slice(0,10);};
@@ -315,6 +317,13 @@ function activatePlace(target){
   const lat=parseFloat(target.dataset.lat), lng=parseFloat(target.dataset.lng);
   if(map&&!isNaN(lat)){ map.flyTo([lat,lng],7,{duration:.9}); map.closePopup(); }
   setActiveLine(target.dataset.fullIdx);
+  setActivePin(target.dataset.fullIdx);
+}
+
+function setActivePin(fullIdx){
+  if(activePinIdx!=null){ const prev=markersByFullIdx[activePinIdx]; const el=prev&&prev.getElement(); if(el)el.classList.remove("active"); }
+  activePinIdx=null;
+  if(fullIdx!=null){ const m=markersByFullIdx[fullIdx]; const el=m&&m.getElement(); if(el){ el.classList.add("active"); activePinIdx=fullIdx; } }
 }
 
 function setLineStyle(line,active){
@@ -371,17 +380,19 @@ window.addEventListener("scroll", scheduleCursorTick, {passive:true, capture:tru
 function observe(){ _lastActiveIdx=null; scheduleCursorTick(); }
 
 function initMap(){
-  if(map){ map.remove(); map=null; } mapReady=false; routeLines={}; activeLineIdx=null;
+  if(map){ map.remove(); map=null; } mapReady=false; routeLines={}; activeLineIdx=null; markersByFullIdx={}; activePinIdx=null;
   const leg=document.querySelector("#map .legend"); if(leg)leg.remove();
   map=L.map("map",{zoomControl:true,attributionControl:false}).setView([44,12],5);
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{maxZoom:19}).addTo(map);
   const pts=[],bounds=[];
   stays.forEach((i,idx)=>{ if(!i.coords)return; bounds.push(i.coords); pts.push(i.coords);
-    const ic=L.divIcon({className:"",html:'<div style="width:16px;height:16px;border-radius:50%;background:'+i._color+';border:3px solid #04121a;box-shadow:0 0 0 2px '+i._color+'"></div>',iconSize:[16,16],iconAnchor:[8,8]});
+    const ic=L.divIcon({className:"pin",html:'<div class="pin-dot" style="width:16px;height:16px;border-radius:50%;background:'+i._color+';border:3px solid #04121a;box-shadow:0 0 0 2px '+i._color+'"></div>',iconSize:[16,16],iconAnchor:[8,8]});
     const m=L.marker(i.coords,{icon:ic}).addTo(map).bindPopup("<b>"+i.location+"</b><br>"+i.activity+(i.highlight?"<br>★ "+i.highlight:""));
     markers[idx]=m;
     if(i.highlightCoords){ L.circleMarker(i.highlightCoords,{radius:5,color:"#ffcf6b",fillColor:"#ffcf6b",fillOpacity:.9,weight:1}).addTo(map).bindPopup("★ "+i.highlight); bounds.push(i.highlightCoords); }
   });
+  DATA.itinerary.forEach((i,fullIdx)=>{ if(!i.coords)return;
+    for(const k in markers){ if(same(stays[k].coords,i.coords)){ markersByFullIdx[fullIdx]=markers[k]; break; } } });
   if(DATA.home&&DATA.home.coords){ L.marker(DATA.home.coords,{icon:L.divIcon({className:"",html:'<div style="font-size:18px">🏠</div>',iconSize:[20,20],iconAnchor:[10,10]})}).addTo(map).bindPopup("🏠 "+DATA.home.name); bounds.push(DATA.home.coords); }
   drawRoute();
   addLegend();
