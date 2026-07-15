@@ -182,6 +182,7 @@ const MODES=[{id:"journey",label:"Journey"},{id:"cal",label:"Calendar"},{id:"fin
 const PLACE_COLORS=["#5ac8fa","#67d98a","#ffcf6b","#c792ea","#ff8a65","#4dd0e1","#f06292"];
 const TODAY=new Date(); TODAY.setHours(0,0,0,0);
 let DATA, map, markers={}, stays=[], mode="journey", mapReady=false, io, MANIFEST=null;
+let routeLines={}, activeLineIdx=null;
 
 const pd=s=>{const[y,m,d]=s.slice(0,10).split("-").map(Number);return new Date(y,m-1,d);};
 const iso=d=>{const z=new Date(d);z.setMinutes(z.getMinutes()-z.getTimezoneOffset());return z.toISOString().slice(0,10);};
@@ -259,7 +260,6 @@ function renderFeed(){
     }
   });
   observe();
-  _lastActiveIdx=null; scheduleCursorTick();
 }
 
 function hero(){
@@ -314,42 +314,64 @@ function activatePlace(target){
     document.querySelectorAll(".prog .stop").forEach(s=>s.classList.toggle("active",s.dataset.idx===idx)); }
   const lat=parseFloat(target.dataset.lat), lng=parseFloat(target.dataset.lng);
   if(map&&!isNaN(lat)){ map.flyTo([lat,lng],7,{duration:.9}); map.closePopup(); }
+  setActiveLine(target.dataset.fullIdx);
 }
 
-function observe(){
-  if(io){ io.disconnect(); io=null; }
-  const mobile=matchMedia("(max-width:860px)").matches;
-  if(mobile) return; // mobile uses scroll-progress cursor instead, see mobileCursorTick()
-  io=new IntersectionObserver(es=>{
-    es.forEach(en=>{ if(en.isIntersecting)activatePlace(en.target); });
-  }, { root:document.getElementById("feed"), rootMargin:"-45% 0px -45% 0px", threshold:0 });
-  document.querySelectorAll(".place,.conn").forEach(p=>io.observe(p));
+function setLineStyle(line,active){
+  const b=line._baseStyle; if(!b)return;
+  line.setStyle(active?{weight:b.weight+3,opacity:1}:{weight:b.weight,opacity:b.opacity});
+  if(active&&line.bringToFront)line.bringToFront();
+}
+function setActiveLine(idx){
+  if(activeLineIdx!=null&&routeLines[activeLineIdx])routeLines[activeLineIdx].forEach(l=>setLineStyle(l,false));
+  activeLineIdx=null;
+  if(idx!=null&&routeLines[idx]){ routeLines[idx].forEach(l=>setLineStyle(l,true)); activeLineIdx=idx; }
+}
+function registerRouteLine(idx,line){
+  if(idx==null)return;
+  const key=String(idx);
+  line._baseStyle={weight:line.options.weight,opacity:line.options.opacity};
+  (routeLines[key]=routeLines[key]||[]).push(line);
+  if(activeLineIdx===key)setLineStyle(line,true);
 }
 
-// mobile: place an activation cursor that tracks how far through the list
-// you've scrolled (near top of feed early on, sliding toward the bottom of
-// the viewport as you approach the end), so the last item is reachable
-// without padding the page out. Tracks stays *and* travel legs.
+// activation cursor: a line that tracks how far through the list you've
+// scrolled (near the top early on, sliding toward the bottom of the visible
+// area as you approach the end), so the last item is always reachable
+// without padding the page out. Scans every item each tick (not
+// IntersectionObserver) so fast/flung scrolling can't skip short items like
+// travel-leg connectors between two callback samples. Tracks stays and legs.
 let _lastActiveIdx=null;
-function mobileCursorTick(){
-  if(mode!=="journey"||!matchMedia("(max-width:860px)").matches)return;
+function cursorTick(){
+  if(mode!=="journey")return;
   const items=[...document.querySelectorAll(".place,.conn")]; if(!items.length)return;
-  const mapEl=document.getElementById("map");
-  const stickyH=mapEl?mapEl.getBoundingClientRect().bottom:0;
-  const vh=window.innerHeight;
-  const scrollable=document.documentElement.scrollHeight-vh;
-  const progress=scrollable>0?Math.min(1,Math.max(0,window.scrollY/scrollable)):0;
-  const cursorY=stickyH+(vh-stickyH)*(0.25+0.65*progress);
+  const mobile=matchMedia("(max-width:860px)").matches;
+  let cursorY;
+  if(mobile){
+    const mapEl=document.getElementById("map");
+    const stickyH=mapEl?mapEl.getBoundingClientRect().bottom:0;
+    const vh=window.innerHeight;
+    const scrollable=document.documentElement.scrollHeight-vh;
+    const progress=scrollable>0?Math.min(1,Math.max(0,window.scrollY/scrollable)):0;
+    cursorY=stickyH+(vh-stickyH)*(0.25+0.65*progress);
+  } else {
+    const feedEl=document.getElementById("feed");
+    const rect=feedEl.getBoundingClientRect();
+    const scrollable=feedEl.scrollHeight-feedEl.clientHeight;
+    const progress=scrollable>0?Math.min(1,Math.max(0,feedEl.scrollTop/scrollable)):0;
+    cursorY=rect.top+rect.height*(0.25+0.5*progress);
+  }
   let active=null;
   for(const p of items){ if(p.getBoundingClientRect().top<=cursorY)active=p; else break; }
   if(active&&active.dataset.fullIdx!==_lastActiveIdx){ _lastActiveIdx=active.dataset.fullIdx; activatePlace(active); }
 }
 let _cursorRaf=null;
-function scheduleCursorTick(){ if(_cursorRaf)return; _cursorRaf=requestAnimationFrame(()=>{ _cursorRaf=null; mobileCursorTick(); }); }
-window.addEventListener("scroll", scheduleCursorTick, {passive:true});
+function scheduleCursorTick(){ if(_cursorRaf)return; _cursorRaf=requestAnimationFrame(()=>{ _cursorRaf=null; cursorTick(); }); }
+window.addEventListener("scroll", scheduleCursorTick, {passive:true, capture:true});
+function observe(){ _lastActiveIdx=null; scheduleCursorTick(); }
 
 function initMap(){
-  if(map){ map.remove(); map=null; } mapReady=false;
+  if(map){ map.remove(); map=null; } mapReady=false; routeLines={}; activeLineIdx=null;
   const leg=document.querySelector("#map .legend"); if(leg)leg.remove();
   map=L.map("map",{zoomControl:true,attributionControl:false}).setView([44,12],5);
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{maxZoom:19}).addTo(map);
@@ -372,17 +394,17 @@ const same=(a,b)=>a&&b&&Math.abs(a[0]-b[0])<1e-4&&Math.abs(a[1]-b[1])<1e-4;
 function drawRoute(){
   // ordered waypoints: home origin, then every item carrying coords
   const wp=[];
-  if(DATA.home&&DATA.home.coords) wp.push({coords:DATA.home.coords,type:"flight"});
-  DATA.itinerary.forEach(i=>{ if(i.coords) wp.push({coords:i.coords,type:i.type,driveTo:i.driveTo}); });
+  if(DATA.home&&DATA.home.coords) wp.push({coords:DATA.home.coords,type:"flight",fullIdx:null});
+  DATA.itinerary.forEach((i,fullIdx)=>{ if(i.coords) wp.push({coords:i.coords,type:i.type,driveTo:i.driveTo,fullIdx}); });
   for(let k=1;k<wp.length;k++){
     const a=wp[k-1].coords, b=wp[k].coords; if(same(a,b))continue;
     let mode=wp[k].type;
     if(mode==="stay") mode = wp[k].driveTo ? "transport" : "flight";
-    if(mode==="transport") drawRoad(a,b); else drawFlight(a,b);
+    if(mode==="transport") drawRoad(a,b,wp[k].fullIdx); else drawFlight(a,b,wp[k].fullIdx);
   }
 }
 // geodesic arc via slerp — renders as a curved plane path on the map
-function drawFlight(a,b){
+function drawFlight(a,b,idx){
   const toXYZ=([lat,lng])=>{const p=lat*Math.PI/180,l=lng*Math.PI/180;return[Math.cos(p)*Math.cos(l),Math.cos(p)*Math.sin(l),Math.sin(p)];};
   const A=toXYZ(a),B=toXYZ(b); let dot=A[0]*B[0]+A[1]*B[1]+A[2]*B[2]; dot=Math.max(-1,Math.min(1,dot));
   const om=Math.acos(dot), sin=Math.sin(om); const N=64, line=[];
@@ -394,18 +416,19 @@ function drawFlight(a,b){
     const lat=Math.atan2(z,Math.sqrt(x*x+y*y))*180/Math.PI, lng=Math.atan2(y,x)*180/Math.PI;
     line.push([lat,lng]);
   }
-  L.polyline(line,{color:"#c792ea",weight:2.5,dashArray:"1 9",opacity:.85,lineCap:"round"}).addTo(map);
+  const pl=L.polyline(line,{color:"#c792ea",weight:2.5,dashArray:"1 9",opacity:.85,lineCap:"round"}).addTo(map);
+  registerRouteLine(idx,pl);
   const mid=line[Math.floor(N/2)];
   L.marker(mid,{icon:L.divIcon({className:"",html:'<div style="font-size:14px;transform:rotate(45deg)">✈</div>',iconSize:[16,16],iconAnchor:[8,8]}),interactive:false}).addTo(map);
 }
 // real road geometry via OSRM public router; falls back to straight line offline
-function drawRoad(a,b){
-  const fb=()=>L.polyline([a,b],{color:"#ffcf6b",weight:3,opacity:.5,dashArray:"6 6"}).addTo(map);
+function drawRoad(a,b,idx){
+  const fb=()=>registerRouteLine(idx,L.polyline([a,b],{color:"#ffcf6b",weight:3,opacity:.5,dashArray:"6 6"}).addTo(map));
   const url="https://router.project-osrm.org/route/v1/driving/"+a[1]+","+a[0]+";"+b[1]+","+b[0]+"?overview=full&geometries=geojson";
   fetch(url).then(r=>r.ok?r.json():Promise.reject()).then(j=>{
     const g=j&&j.routes&&j.routes[0]&&j.routes[0].geometry.coordinates;
     if(!g)return fb();
-    L.polyline(g.map(c=>[c[1],c[0]]),{color:"#ffcf6b",weight:3.5,opacity:.85,lineCap:"round"}).addTo(map);
+    registerRouteLine(idx,L.polyline(g.map(c=>[c[1],c[0]]),{color:"#ffcf6b",weight:3.5,opacity:.85,lineCap:"round"}).addTo(map));
   }).catch(fb);
 }
 function addLegend(){
