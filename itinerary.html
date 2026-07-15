@@ -307,7 +307,7 @@ function activatePlace(target){
   const idx=target.dataset.idx;
   document.querySelectorAll(".prog .stop").forEach(s=>s.classList.toggle("active",s.dataset.idx===idx));
   const lat=parseFloat(target.dataset.lat), lng=parseFloat(target.dataset.lng);
-  if(map&&!isNaN(lat)){ map.flyTo([lat,lng],7,{duration:.9}); const mk=markers[idx]; if(mk)mk.openPopup(); }
+  if(map&&!isNaN(lat)){ map.flyTo([lat,lng],7,{duration:.9}); map.closePopup(); }
 }
 
 function observe(){
