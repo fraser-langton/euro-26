@@ -106,10 +106,13 @@
   .legend .ln.road { border-top-style:solid; border-color:var(--transport); }
 
   /* connectors (flights/transport) */
-  .conn { display:flex; align-items:center; gap:10px; padding:4px 0 4px 8px; margin:2px 0; color:var(--dim); font-size:13px; }
+  .conn { display:flex; align-items:center; gap:10px; padding:4px 8px; margin:2px 0; color:var(--dim); font-size:13px;
+    border-radius:10px; transition:background .2s, color .2s; }
   .conn .ic { width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center;
     font-size:13px; border:1px solid var(--line); flex-shrink:0; }
   .conn.flight .ic { color:var(--flight); } .conn.transport .ic { color:var(--transport); }
+  .conn.active { color:var(--txt); background:rgba(127,127,127,.1); }
+  .conn.active .ic { border-color:var(--stay); }
   .gap-warn { display:flex; gap:8px; align-items:center; background:rgba(255,107,107,.1); border:1px dashed var(--gap);
     color:var(--gap); border-radius:12px; padding:9px 14px; margin:8px 0; font-size:13px; }
 
@@ -245,14 +248,14 @@ function renderFeed(){
   const feed=document.getElementById("feed"); feed.innerHTML="";
   feed.appendChild(hero());
   const covered=coveredNights(); let prevEnd=null; let stayIdx=0;
-  DATA.itinerary.forEach(i=>{
+  DATA.itinerary.forEach((i,fullIdx)=>{
     const[s,e]=span(i);
     if(i.type==="stay"){
       if(prevEnd){ for(let d=new Date(prevEnd);d<s;d=add(d,1)){ if(!covered.has(iso(d))){ const w=document.createElement("div"); w.className="gap-warn"; w.innerHTML="⚠ No stay booked · night of "+fmt(d); feed.appendChild(w);} } }
       prevEnd=e;
-      feed.appendChild(placeCard(i, stayIdx++));
+      feed.appendChild(placeCard(i, stayIdx++, fullIdx));
     } else {
-      feed.appendChild(connector(i));
+      feed.appendChild(connector(i, fullIdx));
     }
   });
   observe();
@@ -268,7 +271,7 @@ function hero(){
   return wrap;
 }
 
-function placeCard(i, idx){
+function placeCard(i, idx, fullIdx){
   const[s,e]=span(i); const nights=Math.round((e-s)/864e5);
   const leg=document.createElement("div"); leg.className="leg";
   const rates=(DATA.currencies&&DATA.currencies.rates)||{}; const base=(DATA.currencies&&DATA.currencies.base)||"AUD";
@@ -279,7 +282,7 @@ function placeCard(i, idx){
     chips+='<span class="chip '+(i.cost.paid?"cost":"pay")+'">'+(i.cost.paid?"✓ ":"")+b.toLocaleString()+" "+base+'</span>'; }
   const costBadge=i.cost?' <span class="chip '+(i.cost.paid?"cost":"pay")+'">'+(i.cost.paid?"✓ ":"")+Math.round(i.cost.amount*(rates[i.cost.currency]!=null?rates[i.cost.currency]:1)).toLocaleString()+" "+base+'</span>':"";
   leg.innerHTML=
-    '<div class="place" data-idx="'+idx+'" data-lat="'+(i.coords?i.coords[0]:"")+'" data-lng="'+(i.coords?i.coords[1]:"")+'">'+
+    '<div class="place" data-idx="'+idx+'" data-full-idx="'+fullIdx+'" data-lat="'+(i.coords?i.coords[0]:"")+'" data-lng="'+(i.coords?i.coords[1]:"")+'">'+
       '<div class="bar" style="background:'+i._color+'"></div>'+
       '<div class="body">'+
         '<div class="top"><h2>'+i.location+'</h2><div class="nights">'+nights+' night'+(nights!==1?"s":"")+'</div></div>'+
@@ -293,8 +296,10 @@ function placeCard(i, idx){
   return leg;
 }
 
-function connector(i){
+function connector(i, fullIdx){
   const c=document.createElement("div"); c.className="conn "+(i.type||"");
+  c.dataset.fullIdx=fullIdx;
+  if(i.coords){ c.dataset.lat=i.coords[0]; c.dataset.lng=i.coords[1]; }
   const ic=i.type==="flight"?"✈":i.type==="transport"?"🚗":"•";
   c.innerHTML='<div class="ic">'+ic+'</div><div>'+i.activity+(i.note?' — <i>'+i.note+'</i>':'')+'</div>';
   return c;
@@ -302,10 +307,11 @@ function connector(i){
 
 // scroll-linked map
 function activatePlace(target){
-  document.querySelectorAll(".place.active").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".place.active,.conn.active").forEach(p=>p.classList.remove("active"));
   target.classList.add("active");
-  const idx=target.dataset.idx;
-  document.querySelectorAll(".prog .stop").forEach(s=>s.classList.toggle("active",s.dataset.idx===idx));
+  const isPlace=target.classList.contains("place");
+  if(isPlace){ const idx=target.dataset.idx;
+    document.querySelectorAll(".prog .stop").forEach(s=>s.classList.toggle("active",s.dataset.idx===idx)); }
   const lat=parseFloat(target.dataset.lat), lng=parseFloat(target.dataset.lng);
   if(map&&!isNaN(lat)){ map.flyTo([lat,lng],7,{duration:.9}); map.closePopup(); }
 }
@@ -317,17 +323,17 @@ function observe(){
   io=new IntersectionObserver(es=>{
     es.forEach(en=>{ if(en.isIntersecting)activatePlace(en.target); });
   }, { root:document.getElementById("feed"), rootMargin:"-45% 0px -45% 0px", threshold:0 });
-  document.querySelectorAll(".place").forEach(p=>io.observe(p));
+  document.querySelectorAll(".place,.conn").forEach(p=>io.observe(p));
 }
 
 // mobile: place an activation cursor that tracks how far through the list
 // you've scrolled (near top of feed early on, sliding toward the bottom of
-// the viewport as you approach the end), so the last card is reachable
-// without padding the page out.
+// the viewport as you approach the end), so the last item is reachable
+// without padding the page out. Tracks stays *and* travel legs.
 let _lastActiveIdx=null;
 function mobileCursorTick(){
   if(mode!=="journey"||!matchMedia("(max-width:860px)").matches)return;
-  const places=[...document.querySelectorAll(".place")]; if(!places.length)return;
+  const items=[...document.querySelectorAll(".place,.conn")]; if(!items.length)return;
   const mapEl=document.getElementById("map");
   const stickyH=mapEl?mapEl.getBoundingClientRect().bottom:0;
   const vh=window.innerHeight;
@@ -335,8 +341,8 @@ function mobileCursorTick(){
   const progress=scrollable>0?Math.min(1,Math.max(0,window.scrollY/scrollable)):0;
   const cursorY=stickyH+(vh-stickyH)*(0.25+0.65*progress);
   let active=null;
-  for(const p of places){ if(p.getBoundingClientRect().top<=cursorY)active=p; else break; }
-  if(active&&active.dataset.idx!==_lastActiveIdx){ _lastActiveIdx=active.dataset.idx; activatePlace(active); }
+  for(const p of items){ if(p.getBoundingClientRect().top<=cursorY)active=p; else break; }
+  if(active&&active.dataset.fullIdx!==_lastActiveIdx){ _lastActiveIdx=active.dataset.fullIdx; activatePlace(active); }
 }
 let _cursorRaf=null;
 function scheduleCursorTick(){ if(_cursorRaf)return; _cursorRaf=requestAnimationFrame(()=>{ _cursorRaf=null; mobileCursorTick(); }); }
