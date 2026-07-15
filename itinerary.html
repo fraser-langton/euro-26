@@ -402,6 +402,7 @@ function initMap(){
   stays.forEach((i,idx)=>{ if(!i.coords)return; bounds.push(i.coords); pts.push(i.coords);
     const ic=L.divIcon({className:"pin",html:'<div class="pin-dot" style="width:16px;height:16px;border-radius:50%;background:'+i._color+';border:3px solid #04121a;box-shadow:0 0 0 2px '+i._color+'"></div>',iconSize:[16,16],iconAnchor:[8,8]});
     const m=L.marker(i.coords,{icon:ic}).addTo(map).bindPopup("<b>"+i.location+"</b><br>"+i.activity+(i.highlight?"<br>★ "+i.highlight:""));
+    m.on("click",()=>{ const node=document.querySelector('.place[data-idx="'+idx+'"]'); if(node){ node.scrollIntoView({block:"center",behavior:"smooth"}); activatePlace(node); } });
     markers[idx]=m;
     if(i.highlightCoords){ L.circleMarker(i.highlightCoords,{radius:5,color:"#ffcf6b",fillColor:"#ffcf6b",fillOpacity:.9,weight:1}).addTo(map).bindPopup("★ "+i.highlight); bounds.push(i.highlightCoords); }
   });
