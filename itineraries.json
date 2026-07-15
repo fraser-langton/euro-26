@@ -81,11 +81,19 @@
           ]
         },
         {
+          "date": "2026-08-09",
+          "activity": "Drive to Val Gardena (1h)",
+          "type": "transport",
+          "coords": [
+            46.5766,
+            11.6667
+          ]
+        },
+        {
           "dateRange": "2026-08-09 to 2026-08-12",
           "location": "Val Gardena",
-          "activity": "Drive to Val Gardena, stay",
+          "activity": "Stay in Val Gardena",
           "type": "stay",
-          "driveTo": true,
           "coords": [
             46.5766,
             11.6667
@@ -259,11 +267,19 @@
           ]
         },
         {
+          "date": "2026-08-09",
+          "activity": "Drive to Val Gardena (1h)",
+          "type": "transport",
+          "coords": [
+            46.5766,
+            11.6667
+          ]
+        },
+        {
           "dateRange": "2026-08-09 to 2026-08-12",
           "location": "Val Gardena",
-          "activity": "Drive to Val Gardena, stay",
+          "activity": "Stay in Val Gardena",
           "type": "stay",
-          "driveTo": true,
           "coords": [
             46.5766,
             11.6667
