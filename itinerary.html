@@ -78,7 +78,7 @@
   .leg { position:relative; margin:0 0 14px; }
   .place { background:var(--panel); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);
     border:1px solid var(--line); border-radius:18px; padding:0; overflow:hidden; transition:transform .25s, box-shadow .25s;
-    scroll-margin-top:20px; }
+    scroll-margin-top:20px; cursor:pointer; }
   .place.active { transform:translateY(-2px); box-shadow:0 12px 40px rgba(0,0,0,.35); border-color:var(--stay); }
   .place .bar { height:6px; }
   .place .body { padding:16px 18px; }
@@ -107,7 +107,7 @@
 
   /* connectors (flights/transport) */
   .conn { display:flex; align-items:center; gap:10px; padding:4px 8px; margin:2px 0; color:var(--dim); font-size:13px;
-    border-radius:10px; transition:background .2s, color .2s; }
+    border-radius:10px; transition:background .2s, color .2s; cursor:pointer; }
   .conn .ic { width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center;
     font-size:13px; border:1px solid var(--line); flex-shrink:0; }
   .conn.flight .ic { color:var(--flight); } .conn.transport .ic { color:var(--transport); }
