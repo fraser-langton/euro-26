@@ -57,7 +57,7 @@
   /* ---- layout ---- */
   .stage { position:absolute; top:64px; left:0; right:0; bottom:0; }
   #map { position:absolute; inset:0; width:55%; }
-  .feed { position:absolute; top:0; right:0; bottom:0; width:45%; overflow-y:auto; padding:28px 26px 60vh;
+  .feed { position:absolute; top:0; right:0; bottom:0; width:45%; overflow-y:auto; padding:28px 26px 40px;
     scroll-behavior:smooth; }
   .mode-cal .feed, .mode-fin .feed { width:100%; }
   .mode-cal #map, .mode-fin #map { display:none; }
@@ -319,7 +319,7 @@ function activatePlace(target){
 
 function setLineStyle(line,active){
   const b=line._baseStyle; if(!b)return;
-  line.setStyle(active?{weight:b.weight+3,opacity:1}:{weight:b.weight,opacity:b.opacity});
+  line.setStyle(active?{weight:b.weight+5,opacity:1,color:"#ffffff"}:{weight:b.weight,opacity:b.opacity,color:b.color});
   if(active&&line.bringToFront)line.bringToFront();
 }
 function setActiveLine(idx){
@@ -330,7 +330,7 @@ function setActiveLine(idx){
 function registerRouteLine(idx,line){
   if(idx==null)return;
   const key=String(idx);
-  line._baseStyle={weight:line.options.weight,opacity:line.options.opacity};
+  line._baseStyle={weight:line.options.weight,opacity:line.options.opacity,color:line.options.color};
   (routeLines[key]=routeLines[key]||[]).push(line);
   if(activeLineIdx===key)setLineStyle(line,true);
 }
