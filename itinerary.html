@@ -353,13 +353,13 @@ function cursorTick(){
     const vh=window.innerHeight;
     const scrollable=document.documentElement.scrollHeight-vh;
     const progress=scrollable>0?Math.min(1,Math.max(0,window.scrollY/scrollable)):0;
-    cursorY=stickyH+(vh-stickyH)*(0.25+0.65*progress);
+    cursorY=stickyH+(vh-stickyH)*(0.12+0.85*progress);
   } else {
     const feedEl=document.getElementById("feed");
     const rect=feedEl.getBoundingClientRect();
     const scrollable=feedEl.scrollHeight-feedEl.clientHeight;
     const progress=scrollable>0?Math.min(1,Math.max(0,feedEl.scrollTop/scrollable)):0;
-    cursorY=rect.top+rect.height*(0.25+0.5*progress);
+    cursorY=rect.top+rect.height*(0.12+0.85*progress);
   }
   let active=null;
   for(const p of items){ if(p.getBoundingClientRect().top<=cursorY)active=p; else break; }
