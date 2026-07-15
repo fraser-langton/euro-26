@@ -1,0 +1,6 @@
+{
+  "active": "mike",
+  "options": [
+    { "id": "mike", "name": "Mike", "file": "itinerary.json" }
+  ]
+}

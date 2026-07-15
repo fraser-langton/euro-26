@@ -19,10 +19,28 @@ home, Aug 2026). Three modes over the same data:
 
 | File | Role |
 |------|------|
-| `itinerary.json` | **Source of truth.** All trip data. Edit this to change the trip. |
-| `itinerary.html` | The whole app — HTML + CSS + JS inline. Reads `itinerary.json` at runtime via `fetch`. |
+| `itineraries.json` | **Manifest** of selectable itineraries (dropdown). Lists `{id, name, file}` + `active`. |
+| `itinerary.json` | Default itinerary data ("Mike"). Source of truth for that trip. |
+| `itinerary.html` | The whole app — HTML + CSS + JS inline. Reads the manifest then the selected file via `fetch`. |
 | `AGENTS.md` / `CLAUDE.md` | This doc (CLAUDE.md points here). |
 | `README.md` | Human quick-start. |
+
+### Multiple itineraries
+
+`itineraries.json` powers the dropdown in the header:
+
+```jsonc
+{
+  "active": "mike",
+  "options": [ { "id": "mike", "name": "Mike", "file": "itinerary.json" } ]
+}
+```
+
+Each option's `file` is a standalone itinerary file using the exact schema below. **To add an
+alternative:** create `itinerary.<id>.json` with the same shape, then append an option row.
+The app loads `active` first (or the user's last pick, saved in `localStorage["trip"]`);
+switching re-fetches the file and rebuilds the map + all views. Planning agents/workflows
+still target `itinerary.json` unless told otherwise.
 
 ## Run
 

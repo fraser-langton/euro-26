@@ -28,6 +28,12 @@
     -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur); border-bottom:1px solid var(--line); }
   .brand { font-size:19px; font-weight:800; letter-spacing:-.01em; white-space:nowrap; }
   .brand small { display:block; font-size:11px; font-weight:500; color:var(--dim); letter-spacing:.06em; text-transform:uppercase; }
+  .trip-select { background:rgba(127,127,127,.14); color:var(--txt); border:1px solid var(--line);
+    border-radius:10px; padding:7px 30px 7px 12px; font-size:13px; font-weight:600; cursor:pointer;
+    -webkit-appearance:none; appearance:none; white-space:nowrap;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%238b98a5' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 11px center; }
+  .trip-select:hover { border-color:var(--accent); }
   .cd { font-size:13px; color:var(--dim); white-space:nowrap; }
   .cd b { color:var(--accent); font-size:20px; }
   /* journey progress line */
@@ -141,6 +147,7 @@
 <body class="mode-journey">
 <div class="ribbon">
   <div class="brand" id="brand">Euro '26<small>itinerary</small></div>
+  <select class="trip-select" id="tripSelect" title="Switch itinerary"></select>
   <div class="prog" id="prog"></div>
   <div class="cd" id="cd"></div>
   <div class="modes" id="modes"></div>
@@ -156,7 +163,7 @@
 const MODES=[{id:"journey",label:"Journey"},{id:"cal",label:"Calendar"},{id:"fin",label:"Budget"}];
 const PLACE_COLORS=["#5ac8fa","#67d98a","#ffcf6b","#c792ea","#ff8a65","#4dd0e1","#f06292"];
 const TODAY=new Date(); TODAY.setHours(0,0,0,0);
-let DATA, map, markers={}, stays=[], mode="journey", mapReady=false, io;
+let DATA, map, markers={}, stays=[], mode="journey", mapReady=false, io, MANIFEST=null;
 
 const pd=s=>{const[y,m,d]=s.slice(0,10).split("-").map(Number);return new Date(y,m-1,d);};
 const iso=d=>{const z=new Date(d);z.setMinutes(z.getMinutes()-z.getTimezoneOffset());return z.toISOString().slice(0,10);};
@@ -165,12 +172,29 @@ const add=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
 function span(i){ if(i.dateRange){const p=i.dateRange.split(" to ");return[pd(p[0].split("/")[0]),pd((p[1]||p[0]).split("/")[0])];} const d=pd(i.date);return[d,d]; }
 
 async function boot(){
-  try{ const r=await fetch("itinerary.json",{cache:"no-store"}); if(!r.ok)throw new Error("HTTP "+r.status); DATA=await r.json(); }
-  catch(e){ document.querySelector(".stage").innerHTML='<div class="err"><b>Cannot load itinerary.json.</b><br><br>Serve the folder:<br><code>python3 -m http.server 8000</code><br>then open <code>http://localhost:8000/itinerary.html</code><br><br>('+e.message+')</div>'; return; }
-  document.getElementById("brand").innerHTML=(DATA.trip||"Trip")+"<small>itinerary</small>";
-  // assign color identity to each stay
+  try{ const r=await fetch("itineraries.json",{cache:"no-store"}); if(!r.ok)throw 0; MANIFEST=await r.json(); }
+  catch(e){ MANIFEST={ active:"default", options:[{ id:"default", name:"Itinerary", file:"itinerary.json" }] }; }
+  renderModes(); renderTripSelect();
+  const saved=localStorage.getItem("trip"); const ids=(MANIFEST.options||[]).map(o=>o.id);
+  await loadTrip((saved&&ids.includes(saved))?saved:(MANIFEST.active||ids[0]));
+}
+
+async function loadTrip(id){
+  const opt=(MANIFEST.options||[]).find(o=>o.id===id)||(MANIFEST.options||[])[0]; if(!opt)return;
+  try{ const r=await fetch(opt.file,{cache:"no-store"}); if(!r.ok)throw new Error("HTTP "+r.status); DATA=await r.json(); }
+  catch(e){ document.querySelector(".stage").innerHTML='<div class="err"><b>Cannot load '+opt.file+'.</b><br><br>Serve the folder:<br><code>python3 -m http.server 8000</code><br><br>('+e.message+')</div>'; return; }
+  localStorage.setItem("trip",id);
+  const sel=document.getElementById("tripSelect"); if(sel)sel.value=id;
+  stays=[]; markers={};
   let ci=0; DATA.itinerary.forEach(i=>{ if(i.type==="stay"){ i._color=PLACE_COLORS[ci++%PLACE_COLORS.length]; stays.push(i);} });
-  renderModes(); renderCountdown(); renderProgress(); initMap(); setMode("journey");
+  document.getElementById("brand").innerHTML=(DATA.trip||"Trip")+"<small>"+(opt.name||"itinerary")+"</small>";
+  renderCountdown(); renderProgress(); initMap(); setMode(mode);
+}
+
+function renderTripSelect(){
+  const sel=document.getElementById("tripSelect"); sel.innerHTML="";
+  (MANIFEST.options||[]).forEach(o=>{ const op=document.createElement("option"); op.value=o.id; op.textContent=o.name; sel.appendChild(op); });
+  sel.onchange=()=>loadTrip(sel.value);
 }
 
 function renderModes(){ const el=document.getElementById("modes"); MODES.forEach(m=>{const b=document.createElement("button");b.textContent=m.label;b.dataset.id=m.id;b.onclick=()=>setMode(m.id);el.appendChild(b);}); }
@@ -288,6 +312,8 @@ function observe(){
 }
 
 function initMap(){
+  if(map){ map.remove(); map=null; } mapReady=false;
+  const leg=document.querySelector("#map .legend"); if(leg)leg.remove();
   map=L.map("map",{zoomControl:true,attributionControl:false}).setView([44,12],5);
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{maxZoom:19}).addTo(map);
   const pts=[],bounds=[];
